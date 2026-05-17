@@ -45,6 +45,70 @@ Optional fields the user may provide:
 
 ---
 
+## AI Search Non-Negotiables
+
+Every article produced by this skill MUST pass these rules. They come from
+[Google's AI Optimization Guide](https://developers.google.com/search/docs/fundamentals/ai-optimization-guide)
+and are what makes content eligible to appear in AI Overviews / AI Mode answers.
+
+### Content quality (write-time rules)
+
+1. **Distinctive perspective** — every article must contain at least one section with
+   first-hand experience, original data, or unique viewpoint not derivable from
+   summarising existing sources. Mark these with explicit language like
+   "in our experience", "we tested", "I visited", "our data shows", etc.
+2. **No commodity templates** — do not produce generic "7 Tips for X" /
+   "10 Best Y" listicles without unique analysis. If the post type is a listicle,
+   each entry must include something the reader cannot get from a competitor's
+   page on the same topic (a specific data point, a personal observation, a
+   contrarian take, a comparison).
+3. **Write for humans first** — natural sentences, no keyword stuffing, no
+   AI-only writing patterns (avoid the banned phrase list in `config.js`).
+4. **Author byline + bio** — every published article must include a visible
+   author byline (defaulting to the Padeli editorial team if no named author)
+   and a 1-paragraph bio with credentials. Include `Author` schema (Person type)
+   in the Article JSON-LD.
+5. **No artificial chunking** — break content by reader need, not by what looks
+   neat for an AI to extract. No forced "Quick answer" boxes if the question
+   doesn't warrant a one-line answer.
+6. **Multimedia richness** — at least 1 image every 400 words. Pillar pages
+   should include at least 1 embedded video (YouTube embed counts).
+
+### Technical non-negotiables (publish-time rules)
+
+7. **Indexability** — no `noindex`, no `nosnippet`, no `max-snippet:0`.
+   The page must be crawlable AND eligible for rich snippets.
+8. **Structured data** — every article publishes with full Article schema
+   (headline, datePublished, dateModified, author, publisher, image, mainEntity).
+   Pillar pages add FAQPage + BreadcrumbList. Leaf pages add HowTo where
+   appropriate.
+9. **Entity clarity** — the topic/entity (venue name, technique name, product
+   name) appears verbatim in H1, meta title, Article schema `about`, and at
+   least one heading.
+10. **Date signals** — both `datePublished` and `dateModified` present in
+    schema; visible "Updated [date]" in the body if older than 90 days.
+11. **No llms.txt** — the site does not publish an llms.txt file. Per Google,
+    this is not required and may signal manipulation.
+
+### Citation & authority
+
+12. **External authority links** — minimum 2-3 outbound links to authoritative
+    sources (federation sites, news outlets, manufacturer docs). No shortener
+    links. No links to other low-authority blogs.
+13. **Cite original data** — any statistic or factual claim must link to its
+    source. The fact-check stage (Step 10) verifies every numeric claim.
+
+### Banned patterns (auto-fail)
+
+- Generic intro "In today's fast-paced world..."
+- "Whether you're a beginner or pro..."
+- Any phrase in `BANNED_PHRASES` in `config.js`
+- "AI-summary" style writing: bullet-heavy with no narrative voice
+- Listicle items that are interchangeable with any other site's listicle on
+  the same topic
+
+---
+
 ## Execution Steps
 
 ### Step 1: Parse Brief
