@@ -487,7 +487,10 @@ node blog-orchestrator.js status slug
 
 ## SOP Reference
 
-Full SOPs at: `04_Ventures/padeli/bundles/blog-seo-sop/raw/`
+Full SOPs at: `blog-seo-sop/raw/` — relative to the **padeli walnut root**, which
+differs per machine (`~/alive/04_Ventures/padeli` on an ALIVE v3 world,
+`~/04_Ventures/padeli` on v2). Resolve the root first, then append. The v3 walnut
+is FLAT — there is no `bundles/` segment.
 
 ### Production Pipeline (how to write)
 
