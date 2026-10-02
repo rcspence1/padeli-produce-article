@@ -25,7 +25,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { POST_TYPES, WORD_COUNT_TARGETS } = require('./config');
+const { POST_TYPES, WORD_COUNT_TARGETS, DATA_DIR } = require('./config');
 const { countWords, slugify } = require('./utils');
 const { afterBlogPipeline } = require('./notion-sync');
 
@@ -33,8 +33,8 @@ const { afterBlogPipeline } = require('./notion-sync');
 // Paths
 // ---------------------------------------------------------------------------
 
-const PROJECT_ROOT = path.join(__dirname, '..');
-const LEDGER_DIR = path.join(PROJECT_ROOT, 'data', 'pipeline-ledger');
+// Ledger lives under the shared data dir ($PADELI_BLOG_DATA_DIR or ./data).
+const LEDGER_DIR = path.join(DATA_DIR, 'pipeline-ledger');
 
 const WORK_DIRS = {
   research: '/tmp/padeli-blog-research',

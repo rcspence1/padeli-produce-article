@@ -19,7 +19,8 @@
 const { readFileSync, writeFileSync, existsSync } = require('node:fs');
 const { join } = require('node:path');
 
-const DATA_DIR = join(__dirname, '..', 'data');
+// DATA_DIR = $PADELI_BLOG_DATA_DIR or <repo>/data (see config.js)
+const { DATA_DIR } = require('./config');
 const NOTION_BASE = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 const SYSTEMS_PAGE_ID = '346d1b51-fb30-8096-9126-e397b0c4ca91';

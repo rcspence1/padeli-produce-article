@@ -23,13 +23,13 @@
 
 const fs = require('fs');
 const path = require('path');
-const { POST_TYPES, WORD_COUNT_TARGETS } = require('./config');
+const { POST_TYPES, WORD_COUNT_TARGETS, DATA_DIR } = require('./config');
 
 // ---------------------------------------------------------------------------
 // Paths & constants
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+// DATA_DIR = $PADELI_BLOG_DATA_DIR or <repo>/data (see config.js)
 const BACKUPS_DIR = path.join(DATA_DIR, 'backups');
 const TRACKER_PATH = path.join(DATA_DIR, 'blog-tracker.json');
 const DB_META_PATH = path.join(DATA_DIR, 'blog-notion-db.json');

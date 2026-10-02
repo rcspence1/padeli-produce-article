@@ -13,14 +13,17 @@
 const fs = require('fs');
 const path = require('path');
 const { SITE_URL } = require('./wp-client');
-const { POST_TYPES } = require('./config');
+const { POST_TYPES, DATA_DIR } = require('./config');
 const { slugify, countWords } = require('./utils');
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DEFAULT_INDEX_PATH = path.resolve(__dirname, '..', 'data', 'page_index.json');
+// page_index.json lives under the shared data dir ($PADELI_BLOG_DATA_DIR or ./data)
+const DEFAULT_INDEX_PATH = path.join(DATA_DIR, 'page_index.json');
+
+const USER_AGENT = 'Mozilla/5.0 (PadeliPipeline)';
 
 /**
  * Map postType_tier combos to funnel positions.

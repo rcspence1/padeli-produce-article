@@ -17,14 +17,13 @@
 const fs = require('fs');
 const path = require('path');
 const { SITE_URL, wpGet, wpPost } = require('./wp-client');
-const { POST_TYPES, IMAGE_COUNT_TARGETS, BANNED_PHRASES } = require('./config');
+const { POST_TYPES, IMAGE_COUNT_TARGETS, BANNED_PHRASES, DATA_DIR } = require('./config');
 const { slugify, delay } = require('./utils');
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
 const BLOG_IMAGES_DIR = path.join(DATA_DIR, 'blog-images');
 const GAPS_LOG = path.join(DATA_DIR, 'blog-image-gaps.json');
 

@@ -10,7 +10,53 @@
  * Node.js v24+ — zero external dependencies — CommonJS
  */
 
+const fs = require('fs');
+const path = require('path');
 const { SITE_URL } = require('./wp-client');
+
+// ---------------------------------------------------------------------------
+// Data directory
+//
+// Every module that persists state (pipeline ledger, tracker cache + backups,
+// image gaps log, page index, Notion DB caches) resolves its files under ONE
+// directory:
+//
+//   $PADELI_BLOG_DATA_DIR            if set (absolute path recommended)
+//   <repo root>/data                 otherwise
+//
+// The directory is created on first use. It is git-ignored. Previously the
+// modules resolved to ../data relative to the repo (i.e. ~/Projects/data),
+// which does not exist on every machine.
+// ---------------------------------------------------------------------------
+
+const DATA_DIR = process.env.PADELI_BLOG_DATA_DIR
+  ? path.resolve(process.env.PADELI_BLOG_DATA_DIR)
+  : path.join(__dirname, 'data');
+
+/**
+ * Ensure DATA_DIR (or a sub-directory of it) exists and return its path.
+ *
+ * @param {...string} segments - optional sub-path segments
+ * @returns {string} absolute path
+ */
+function ensureDataDir(...segments) {
+  const dir = path.join(DATA_DIR, ...segments);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Resolve a file path under DATA_DIR, creating the parent directory.
+ *
+ * @param {...string} segments - path segments, the last one is the file name
+ * @returns {string} absolute file path
+ */
+function dataPath(...segments) {
+  const file = path.join(DATA_DIR, ...segments);
+  const dir = path.dirname(file);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  return file;
+}
 
 // ---------------------------------------------------------------------------
 // Banned / flagged phrase lists (from qc-validator.js)
@@ -232,6 +278,9 @@ function getDisplayCurrency(countryCode) {
 
 module.exports = {
   SITE_URL,
+  DATA_DIR,
+  ensureDataDir,
+  dataPath,
   BANNED_PHRASES,
   HERO_HOOK_EXTRA_BANNED,
   PERSONAL_VISIT_PHRASES,
