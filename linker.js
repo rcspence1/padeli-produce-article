@@ -808,9 +808,12 @@ function applyInternalLinks(html, pageIndex, postMeta, options = {}) {
     const linkTag = `<a href="${fullUrl}">${anchorText}</a>`;
 
     // Replace the matched text in the paragraph with the link
-    // We replace only the first occurrence within this specific paragraph
+    // We replace only the first occurrence within this specific paragraph.
+    // When the fallback matched the closing tag, append before it (keep </p>).
     const oldParagraph = matchResult.paragraphHtml;
-    const newParagraph = oldParagraph.replace(matchText, linkTag);
+    const newParagraph = matchText === '</p>'
+      ? oldParagraph.replace(/<\/p>$/, ` ${linkTag}</p>`)
+      : oldParagraph.replace(matchText, linkTag);
 
     if (oldParagraph !== newParagraph) {
       result = result.replace(oldParagraph, newParagraph);
