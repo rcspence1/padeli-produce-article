@@ -1,0 +1,118 @@
+{
+  "_source": "Built from 04_Ventures/padeli/affiliate-machine/raw/2026-10-01-affiliate-plan-oct-2026.md and 2026-10-01-padeli-geo-links-plugin-v1.0.0.php (checked live in Awin + CJ on 1 Oct 2026). Only partners with status 'approved' count for the market gate.",
+
+  "country_groups": {
+    "EU": ["AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE"],
+    "UKI": ["GB", "IE"],
+    "NORDICS": ["NO", "SE", "DK", "FI", "IS"],
+    "IBERIA": ["ES", "PT", "AD"],
+    "OCEANIA": ["AU", "NZ"],
+    "GULF": ["AE", "SA", "QA", "KW", "BH", "OM"],
+    "SEA": ["ID", "SG", "MY", "TH", "PH", "VN"],
+    "NA": ["US", "CA"]
+  },
+
+  "market_aliases": {
+    "UK": "GB", "UNITED KINGDOM": "GB", "ENGLAND": "GB", "SCOTLAND": "GB", "WALES": "GB",
+    "UAE": "AE", "DUBAI": "AE", "ABU DHABI": "AE",
+    "BALI": "ID", "INDONESIA": "ID", "JAKARTA": "ID",
+    "USA": "US", "UNITED STATES": "US",
+    "SPAIN": "ES", "ITALY": "IT", "PORTUGAL": "PT", "FRANCE": "FR", "GERMANY": "DE",
+    "AUSTRALIA": "AU", "NEW ZEALAND": "NZ", "IRELAND": "IE",
+    "SINGAPORE": "SG", "THAILAND": "TH"
+  },
+
+  "partners": [
+    { "id": "padel-nuestro", "name": "Padel Nuestro", "network": "CJ", "status": "approved", "countries": ["GB", "IE", "ES", "PT", "FR", "DE", "IT", "NL", "BE"], "sells": ["racket", "shoe", "bag", "ball", "other"], "commission": "6% (up to 7.5%)", "hosts": ["padelnuestro.com"], "notes": "Main partner. 3-month EPC EUR 10.57." },
+    { "id": "padel-iberico", "name": "Padel Iberico", "network": "CJ", "status": "approved", "countries": ["GB", "ES", "PT", "FR", "DE", "IT"], "sells": ["racket", "shoe", "bag", "ball", "other"], "commission": "7%", "hosts": ["padeliberico.com", "padeliberico.es"], "notes": "New programme, no data yet." },
+    { "id": "munich-sport", "name": "MUNICH sport", "network": "CJ", "status": "approved", "countries": ["EU", "UKI", "NORDICS", "CH"], "sells": ["shoe"], "commission": "6%", "hosts": ["munichsports.com", "munich.es"], "notes": "Padel and court shoes. Barcelona shoe brand. 'Most of Europe'." },
+    { "id": "padel-market", "name": "Padel Market", "network": "Awin", "awin_mid": "24562", "status": "approved", "countries": ["GB", "IE", "ES", "PT", "FR", "DE", "IT", "NL", "BE", "AT", "CH", "PL", "NO", "SE", "US"], "sells": ["racket", "shoe", "bag", "ball", "other"], "commission": "3% (2% display)", "hosts": ["padelmarket.com"], "notes": "30-day cookie, ~49k products. Only partner covering US and Nordics." },
+    { "id": "padeldogs", "name": "PadelDogs", "network": "Awin", "awin_mid": "122300", "status": "approved", "countries": ["GB"], "sells": ["racket"], "commission": "n/a", "hosts": ["padeldogs.com"], "notes": "Boutique Spanish/Portuguese/Italian rackets. EPC GBP 0.97." },
+    { "id": "adidas-es", "name": "adidas ES", "network": "Awin", "awin_mid": "77008", "status": "approved", "countries": ["ES"], "sells": ["shoe", "other"], "commission": "", "hosts": ["adidas.es"], "notes": "Crazyquick padel shoes, apparel. Dedicated padel category." },
+    { "id": "adidas-it", "name": "adidas IT", "network": "Awin", "awin_mid": "77014", "status": "approved", "countries": ["IT"], "sells": ["shoe", "other"], "commission": "", "hosts": ["adidas.it"], "notes": "Same as ES." },
+    { "id": "adidas-au", "name": "adidas AU", "network": "Awin", "awin_mid": "87085", "status": "approved", "countries": ["AU"], "sells": ["shoe"], "commission": "8% full price / 6% sale / 3% default", "hosts": ["adidas.com.au"], "notes": "Tennis/court shoes and apparel only. No padel products." },
+    { "id": "adidas-nz", "name": "adidas NZ", "network": "Awin", "awin_mid": "87087", "status": "approved", "countries": ["NZ"], "sells": ["shoe"], "commission": "8% full price / 6% sale / 3% default", "hosts": ["adidas.co.nz"], "notes": "No padel products. 194-day average payment time." },
+    { "id": "decathlon-ie", "name": "Decathlon Ireland", "network": "Awin", "awin_mid": "37550", "status": "approved", "countries": ["IE"], "sells": ["racket", "shoe", "ball"], "commission": "", "hosts": ["decathlon.ie"], "notes": "Low EPC." },
+
+    { "id": "decathlon-uk", "name": "Decathlon UK", "network": "Awin", "status": "pending", "countries": ["GB"], "sells": ["racket", "shoe", "ball"], "hosts": ["decathlon.co.uk"] },
+    { "id": "adidas-uk", "name": "adidas UK", "network": "Awin", "status": "pending", "countries": ["GB"], "sells": ["shoe", "other"], "hosts": ["adidas.co.uk"] },
+    { "id": "padel-point", "name": "Padel-Point", "network": "Awin", "status": "pending", "countries": ["ES", "DE", "FR", "IT", "SE"], "sells": ["racket", "shoe", "bag", "ball"], "hosts": ["padel-point.com", "padel-point.es", "padel-point.de", "padel-point.fr", "padel-point.it", "padel-point.se"] },
+    { "id": "tennis-point", "name": "Tennis Point", "network": "Awin", "status": "pending", "countries": ["GB", "ES", "FR", "IT"], "sells": ["racket", "shoe", "bag", "ball"], "hosts": ["tennis-point.co.uk", "tennis-point.es", "tennis-point.fr", "tennis-point.it", "tennis-point.com"] },
+    { "id": "us-padel-market", "name": "US Padel Market", "network": "Awin", "status": "pending", "countries": ["US"], "sells": ["racket", "shoe", "bag", "ball"], "hosts": ["uspadelmarket.com"] },
+    { "id": "dunlop-us", "name": "Dunlop Sports US", "network": "Awin", "status": "pending", "countries": ["US"], "sells": ["racket", "ball"], "hosts": ["dunlopsports.com"] },
+    { "id": "tennis-warehouse-au", "name": "Tennis Warehouse Australia", "network": "Awin", "status": "pending", "countries": ["AU"], "sells": ["racket", "shoe", "bag", "ball"], "hosts": ["tenniswarehouse.com.au"] },
+    { "id": "street-padel", "name": "STREET PADEL", "network": "CJ", "status": "pending", "countries": [], "sells": ["racket"], "hosts": ["streetpadel.com"] },
+    { "id": "stiga", "name": "STIGA Sports", "network": "CJ", "status": "pending", "countries": [], "sells": ["racket"], "hosts": ["stigasports.com"] },
+    { "id": "holabird", "name": "Holabird Sports", "network": "CJ", "status": "pending", "countries": ["US"], "sells": ["shoe", "racket"], "hosts": ["holabirdsports.com"] },
+    { "id": "adidas-fr", "name": "adidas FR", "network": "Awin", "status": "rejected", "countries": ["FR"], "sells": ["shoe"], "hosts": ["adidas.fr"] },
+    { "id": "asics-br", "name": "ASICS BR", "network": "Awin", "status": "rejected", "countries": ["BR"], "sells": ["shoe"], "hosts": ["asics.com.br"] }
+  ],
+
+  "affiliate_networks": [
+    { "network": "Awin", "hosts": ["awin1.com"], "destination_param": "ued" },
+    { "network": "CJ", "hosts": ["dpbolvw.net", "anrdoezrs.net", "jdoqocy.com", "tkqlkly.com", "kqzyfj.com", "emjcd.com"], "destination_param": "url" }
+  ],
+
+  "retailer_hosts": [
+    "padelnuestro.com", "padelmarket.com", "padeldogs.com", "padeliberico.com", "padeliberico.es",
+    "decathlon.co.uk", "decathlon.ie", "decathlon.com", "decathlon.es", "decathlon.fr", "decathlon.de", "decathlon.it", "decathlon.pt",
+    "amazon.co.uk", "amazon.com", "amazon.es", "amazon.de", "amazon.fr", "amazon.it", "amazon.com.au", "amazon.ae", "amazon.sg",
+    "adidas.co.uk", "adidas.com", "adidas.es", "adidas.it", "adidas.fr", "adidas.de", "adidas.com.au", "adidas.co.nz", "adidas.ae",
+    "asics.com", "asics.co.uk", "asics.es", "asics.it",
+    "munichsports.com", "munich.es",
+    "padel-point.com", "padel-point.es", "padel-point.de", "padel-point.fr", "padel-point.it", "padel-point.se",
+    "tennis-point.co.uk", "tennis-point.es", "tennis-point.fr", "tennis-point.it", "tennis-point.com",
+    "pdhsports.com", "padelmania.com", "uspadelmarket.com", "tenniswarehouse.com.au", "holabirdsports.com",
+    "bullpadel.com", "noxsport.com", "head.com", "wilson.com", "babolat.com", "siux.es", "starvie.com", "dunlopsports.com", "kuikma.com"
+  ],
+
+  "brands": [
+    "Bullpadel", "adidas", "Nox", "Head", "Wilson", "Babolat", "Siux", "StarVie", "Dunlop", "Kuikma",
+    "ASICS", "MUNICH", "Joma", "Varlion", "Vairo", "Drop Shot", "Royal Padel", "Softee", "Black Crown",
+    "Osaka", "Oxdog", "Tecnifibre", "Prince", "Slazenger", "Mystica", "Cartri", "Enebe", "Akkeron", "Lok", "Sane"
+  ],
+
+  "boutique_brands": ["Siux", "StarVie", "Vairo", "Drop Shot", "Royal Padel", "Softee", "Black Crown", "Varlion", "Mystica", "Cartri", "Enebe", "Akkeron", "Lok", "Sane"],
+
+  "category_keywords": {
+    "racket": ["racket", "rackets", "racquet", "pala", "palas", "bat"],
+    "shoe": ["shoe", "shoes", "trainer", "trainers", "footwear", "zapatilla", "zapatillas", "crazyquick", "gel-"],
+    "ball": ["ball", "balls", "pelota", "pelotas"],
+    "bag": ["bag", "bags", "paletero", "backpack"]
+  },
+
+  "geo_slugs": {
+    "_note": "Slugs that exist in the plugin starter config (pgl_starter_json). Add product slugs here once they are added to Settings > Geo Links on padeli.com.",
+    "padel-rackets-shop": { "category": "racket", "countries": ["GB", "IE", "IBERIA", "FR", "DE", "IT", "NL", "BE", "AT", "CH", "PL", "NORDICS", "US"] },
+    "boutique-rackets-uk": { "category": "racket", "countries": ["GB"], "boutique": true },
+    "padel-shoes-shop": { "category": "shoe", "countries": ["ES", "IT", "GB", "IE", "PT", "FR", "DE", "NL", "BE", "IBERIA", "AT", "CH", "PL", "NORDICS", "US"] },
+    "court-shoes-oceania": { "category": "shoe", "countries": ["AU", "NZ"] }
+  },
+
+  "category_slugs": {
+    "_note": "Generic fallback slug per product category and market. `default` is used when the category has no slug of its own (balls, bags, other) because Padel Nuestro and Padel Market sell everything.",
+    "racket": { "default": "padel-rackets-shop", "boutique_GB": "boutique-rackets-uk" },
+    "shoe": { "default": "padel-shoes-shop", "AU": "court-shoes-oceania", "NZ": "court-shoes-oceania" },
+    "ball": { "default": "padel-rackets-shop" },
+    "bag": { "default": "padel-rackets-shop" },
+    "other": { "default": "padel-rackets-shop" }
+  },
+
+  "product_slug_convention": "<brand>-<model> in kebab-case, year and edition words dropped. Examples: nox-at10-genius-18k-alum, wilson-optix-v1, bullpadel-vertex-05, adidas-crazyquick.",
+
+  "products": {
+    "_note": "Product slugs that exist in the plugin JSON. Key = slug, value = { name, brand, category, aliases[] }. Empty until Mark adds product entries to Settings > Geo Links; until then product links fall back to the category slug and the product is listed in affiliate.products_without_slug in the ledger."
+  },
+
+  "rules": {
+    "max_boxes_per_1000_words": 2,
+    "fallback_to_category_slug": true,
+    "strip_retailer_from_anchor": true,
+    "retailer_only_anchor": "Check today's price",
+    "price_only_anchor": "Check today's price ({price} when we checked)",
+    "box_button": "Check price at",
+    "box_text_max_chars": 160,
+    "disclosure_html": "<p class=\"affiliate-disclosure\"><em>Links to retailers on this page are affiliate links. If you buy through them, Padeli may earn a small commission at no extra cost to you. It never affects which products we recommend.</em></p>",
+    "existing_disclosure_pattern": "affiliate link[s]?[\\s\\S]{0,200}commission"
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: padeli:produce-article
-description: "Produce a BPA-quality blog post on padeli.com. Full 10-stage pipeline: strategy, research, outline, draft, linking, images, schema, QC (54-point), fact-check, publish as WordPress draft. Use when Ryan says 'write an article', 'produce a post', 'blog about [topic]', or '/padeli:produce-article'."
+description: "Produce a BPA-quality blog post on padeli.com. Full 11-stage pipeline: strategy, research, outline, draft, linking, affiliate, images, schema, QC (54-point), fact-check, publish as WordPress draft. Use when Ryan says 'write an article', 'produce a post', 'blog about [topic]', or '/padeli:produce-article'."
 user-invocable: true
 ---
 
@@ -8,7 +8,15 @@ user-invocable: true
 
 End-to-end pipeline for producing BPA-quality blog posts on padeli.com.
 
-**Pipeline:** brief → strategy → research → outline → draft → linking → images → schema → QC (54-point) → fact-check → publish (draft)
+**Pipeline:** brief → strategy → research → outline → draft → linking → affiliate → images → schema → QC (54-point) → fact-check → publish (draft)
+
+**Cadence:** start at 10–15 posts per week across all markets, buyer-intent
+equipment posts first (affiliate plan, section 3). Raise the cadence only when
+first-attempt QC pass rate is above 80%.
+
+**Data dir:** every module persists to `$PADELI_BLOG_DATA_DIR` or `<repo>/data`
+(created on first use, git-ignored) — pipeline ledger, tracker backups, image
+gaps, `page_index.json`, Notion caches.
 
 ---
 
@@ -30,6 +38,22 @@ Optional fields the user may provide:
 - `is_ymyl` — true for health/injury/fitness content
 - `slug` — URL slug (auto-generated from focus keyword if not given)
 - `title` — working title (auto-generated if not given)
+- `cluster` — cluster targeting for the linking stage (optional):
+
+  ```json
+  "cluster": {
+    "city": "Manchester",                         // display name used in anchors
+    "region_slug": "manchester",                  // WP `region` taxonomy term slug
+    "cornerstone": "/best-padel-rackets-uk-2026/", // parent cornerstone path or slug
+    "max_clubs": 5                                // optional, 3-5
+  }
+  ```
+
+  UP: 1 early link to the cornerstone. ACROSS: 1 link to
+  `https://padeli.com/clubs/<cc>/<region_slug>/` + the top 3–5 published club
+  listings in that region (by `_google_review_count` desc, then date; fetched
+  read-only from `/wp-json/wp/v2/listing?region=<term id>&status=publish`).
+  DOWN: leaves via `[PLANNED:/slug/]` markers.
 
 ---
 
@@ -251,16 +275,60 @@ console.log(JSON.stringify(result, null, 2));
 
 ```bash
 node -e "
-const { applyInternalLinks, loadPageIndex } = require('./linker');
+const { applyInternalLinks, applyClusterLinks, loadPageIndex } = require('./linker');
 const pageIndex = loadPageIndex();
-const postMeta = { slug: '{SLUG}', post_type: '{POST_TYPE}', tier: '{TIER}', pillar_slug: '{PILLAR}', focus_keyword: '{KW}' };
-const result = applyInternalLinks(draftHtml, pageIndex, postMeta);
-console.log('Links applied:', result.linksApplied);
-console.log(result.report);
+const postMeta = { slug: '{SLUG}', post_type: '{POST_TYPE}', tier: '{TIER}', pillar_slug: '{PILLAR}', focus_keyword: '{KW}', market: '{MARKET}' };
+(async () => {
+  let html = draftHtml;
+  if (brief.cluster) {
+    const cl = await applyClusterLinks(html, brief.cluster, postMeta, { pageIndex }); // UP / ACROSS / DOWN
+    html = cl.html; console.log(cl.report.join('\n'));
+  }
+  const result = applyInternalLinks(html, pageIndex, postMeta);
+  console.log('Links applied:', result.linksApplied);
+  console.log(result.report);
+})();
 "
 ```
 
 Applies funnel-aware links (TOFU/MOFU/BOFU) with 30/50/20 anchor variation.
+With `brief.cluster`, cluster links go in first so the cornerstone link is early.
+
+### Step 6b: Affiliate Links
+
+```bash
+node -e "
+const { applyAffiliateLinks, formatAffiliateReport } = require('./affiliate-linker');
+const { html, report } = applyAffiliateLinks(linkedHtml, brief);   // brief.market / country_code drives the gate
+console.log(formatAffiliateReport(report));
+"
+# or: node affiliate-linker.js linked.html --market UK --out monetised.html
+```
+
+Config: `config/affiliate.json` (partners, networks, retailer hosts, brands,
+plugin geo slugs, product slugs, rules). What it does, idempotently:
+
+- **Market gate** — no *approved* partner covers the market → all money links
+  become plain text, boxes/disclosure removed, ledger gets
+  `affiliate.skipped_reason = "no_partner_for_market"`. Today that is AE, ID,
+  SG, TH (and rackets in AU/NZ — only adidas court shoes there).
+- Raw retailer / Awin / CJ links → `[geo_link slug="…"]anchor[/geo_link]`.
+  Never inside headings (those become plain text).
+- One `[geo_box slug="…" title="…" text="…"]` per product section, max
+  `rules.max_boxes_per_1000_words` (2) per 1,000 words.
+- One `<p class="affiliate-disclosure">` after the DA paragraph.
+- Slug: product slug if it exists in `config.products` (= the plugin JSON),
+  else the category slug for the market (`padel-rackets-shop`,
+  `boutique-rackets-uk`, `padel-shoes-shop`, `court-shoes-oceania`).
+  New product slugs follow `<brand>-<model>` kebab (e.g. `nox-at10-genius-18k-alum`).
+- Ledger report (`ledger.affiliate`): `links_converted`, `boxes_added`,
+  `disclosure`, `conversions[]`, `products_without_slug[]` (name, suggested
+  slug, original deep links — add these to *Settings → Geo Links*, then to
+  `config.products`).
+
+Note: the QC check C24 (external authority links) does not count geo links —
+a cornerstone still needs 1+ real authority link (federation, manufacturer,
+news) after this stage.
 
 ### Step 7: Images
 
@@ -359,7 +427,10 @@ Or resume a stopped pipeline:
 node blog-orchestrator.js resume best-padel-courts-birmingham-2026
 ```
 
-The orchestrator handles all stages, saves state to `data/pipeline-ledger/{slug}.json`, and retries up to 3 times on QC failure.
+The orchestrator handles all stages, saves state to `$PADELI_BLOG_DATA_DIR/pipeline-ledger/{slug}.json`
+(default `<repo>/data/pipeline-ledger/`), and retries up to 3 times on QC failure.
+Stage order: `strategy, research, outline, draft, linking, affiliate, images, schema, qc, fact_check, publish`.
+`node blog-orchestrator.js status <slug>` prints the affiliate summary from the ledger.
 
 ---
 
@@ -376,7 +447,8 @@ Market: {market}
 Research: complete ({N} venues / {N} products verified)
 Outline: {N} H2 sections, {N} H3 subsections
 Draft: {word_count} words ({target range})
-Linking: {N} internal links applied ({funnel position})
+Linking: {N} internal links applied ({funnel position}){, cluster: UP 1 / ACROSS 1 + {N} clubs}
+Affiliate: {N} geo_links, {N} boxes, disclosure {added|present} | market {CC} ({partners}) | {N} products without slug — OR — SKIPPED (no_partner_for_market)
 Images: {N} sourced ({N} gaps)
 Schema: {schema types applied}
 QC: PASSED / FAILED ({N} errors, {N} warnings) — attempt {N}/3
@@ -427,6 +499,13 @@ node lib/fact-checker.js validate /path/to/factcheck.md
 # Retrofit links
 node -e "const { retrofitLinks } = require('./retrofit-linker'); ..."
 
+# Affiliate stage only
+node affiliate-linker.js /path/to/linked.html --market UK --out monetised.html
+node affiliate-linker.js /path/to/linked.html --market ES --json
+
+# Tests (fixture = live /best-padel-rackets-uk-2026/ body)
+node --test test/*.test.js
+
 # Tracker
 node blog-tracker.js summary
 node blog-tracker.js next
@@ -451,6 +530,8 @@ node blog-orchestrator.js status slug
 - **Fact-check log is mandatory.** No log, no publish. No override.
 - **QC max 3 retries.** After 3 failures, stop and flag for manual review.
 - **Retrofit-links: review proposals before applying.** Dry-run first for retrofits only (modifying existing live posts).
+- **Never a raw affiliate URL in a post.** Every money link goes through `[geo_link]` → `/go/{slug}/`. Posts for markets with no approved partner carry no money links at all.
+- **Cadence 10–15 posts/week to start.** Buyer-intent equipment posts first.
 
 ---
 
@@ -467,7 +548,8 @@ node blog-orchestrator.js status slug
 | `blog-researcher.js` | 11 | 8-phase research prompt builder + report parser |
 | `outline-generator.js` | 11 | 5 blueprint types + FAQ/DA generation |
 | `draft-writer.js` | 14 | Writing prompt builder + output validator |
-| `linker.js` | 15 | Funnel-aware linking + 30/50/20 anchor variation |
+| `linker.js` | 18 | Funnel-aware linking + 30/50/20 anchor variation + cluster UP/ACROSS/DOWN |
+| `affiliate-linker.js` | 21 | Retailer links → `[geo_link]`, `[geo_box]` per product section, disclosure, market gate |
 | `blog-publisher.js` | 15 | WP REST push + Gutenberg block builders |
 | `blog-image-sourcer.js` | 14 | 3-tier waterfall + per-type image rules |
 | `fact-checker.js` | 11 | 3-pass verification + log builder/validator |
@@ -481,7 +563,10 @@ node blog-orchestrator.js status slug
   - `PADELI_WP_USER` — WP username
   - `PADELI_WP_APP_PASSWORD` — WP app password
   - `GOOGLE_PLACES_API_KEY` — for image sourcing
+  - `PADELI_BLOG_DATA_DIR` — optional; where ledger/tracker/index files live (default `<repo>/data`)
   - Posts always created as WP drafts — Ryan publishes manually from admin
+- Config files:
+  - `config/affiliate.json` — affiliate partners, networks, retailer hosts, brands, plugin geo slugs, product slugs, rules
 
 ---
 

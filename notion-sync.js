@@ -19,7 +19,8 @@
 const { readFileSync, writeFileSync, existsSync } = require('node:fs');
 const { join } = require('node:path');
 
-const DATA_DIR = join(__dirname, '..', 'data');
+// DATA_DIR = $PADELI_BLOG_DATA_DIR or <repo>/data (see config.js)
+const { DATA_DIR, ensureDataDir } = require('./config');
 const NOTION_BASE = 'https://api.notion.com/v1';
 const NOTION_VERSION = '2022-06-28';
 const SYSTEMS_PAGE_ID = '346d1b51-fb30-8096-9126-e397b0c4ca91';
@@ -417,7 +418,8 @@ async function resolveAgentHistoryDb() {
       const title = item.title?.[0]?.plain_text || '';
       if (title === 'Agent History') {
         _agentHistoryDbId = item.id;
-        // Cache to file
+        // Cache to file (create the data dir on first use)
+        ensureDataDir();
         writeFileSync(AGENT_HISTORY_DB_FILE, JSON.stringify({
           database_id: item.id,
           database_url: item.url,

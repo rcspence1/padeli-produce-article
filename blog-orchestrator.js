@@ -1,11 +1,10 @@
 /**
  * Blog Production Pipeline Orchestrator for Padeli
  *
- * Master controller that runs the full 6-stage (expanded to 10-stage)
- * production pipeline:
+ * Master controller that runs the full 11-stage production pipeline:
  *
- *   Strategy -> Research -> Outline -> Draft -> Linking -> Images ->
- *   Schema -> QC -> Fact Check -> Publish
+ *   Strategy -> Research -> Outline -> Draft -> Linking -> Affiliate ->
+ *   Images -> Schema -> QC -> Fact Check -> Publish
  *
  * Features:
  *   - Resumable state via per-slug ledger files
@@ -25,7 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { POST_TYPES, WORD_COUNT_TARGETS } = require('./config');
+const { POST_TYPES, WORD_COUNT_TARGETS, DATA_DIR } = require('./config');
 const { countWords, slugify } = require('./utils');
 const { afterBlogPipeline } = require('./notion-sync');
 
@@ -33,16 +32,25 @@ const { afterBlogPipeline } = require('./notion-sync');
 // Paths
 // ---------------------------------------------------------------------------
 
-const PROJECT_ROOT = path.join(__dirname, '..');
-const LEDGER_DIR = path.join(PROJECT_ROOT, 'data', 'pipeline-ledger');
+// Ledger lives under the shared data dir ($PADELI_BLOG_DATA_DIR or ./data).
+const LEDGER_DIR = path.join(DATA_DIR, 'pipeline-ledger');
 
 const WORK_DIRS = {
   research: '/tmp/padeli-blog-research',
   outline: '/tmp/padeli-blog-outline',
   draft: '/tmp/padeli-blog-draft',
   linked: '/tmp/padeli-blog-linked',
+  affiliate: '/tmp/padeli-blog-affiliate',
   factcheck: '/tmp/padeli-blog-factcheck',
 };
+
+/**
+ * The body HTML to feed downstream stages: affiliate output when the stage
+ * has run, otherwise the linked draft.
+ */
+function bodyHtml(input) {
+  return input.affiliate_html || input.linked_html || input.draft_html || '';
+}
 
 // ---------------------------------------------------------------------------
 // Lazy imports — require inside functions so module loads even if
@@ -61,6 +69,7 @@ function getResearcher() { return lazyRequire('./blog-researcher'); }
 function getOutlineGen() { return lazyRequire('./outline-generator'); }
 function getDraftWriter() { return lazyRequire('./draft-writer'); }
 function getLinker() { return lazyRequire('./linker'); }
+function getAffiliateLinker() { return lazyRequire('./affiliate-linker'); }
 function getQCValidator() { return lazyRequire('./blog-qc-validator'); }
 function getSchemaBuilder() { return lazyRequire('./schema-builder'); }
 function getPublisher() { return lazyRequire('./blog-publisher'); }
@@ -78,6 +87,7 @@ const STAGE_ORDER = [
   'outline',
   'draft',
   'linking',
+  'affiliate',
   'images',
   'schema',
   'qc',
@@ -115,6 +125,12 @@ const STAGES = {
     description: 'Apply internal links with funnel discipline',
     requires: ['draft_html'],
     produces: 'linked_html',
+  },
+  affiliate: {
+    name: 'Affiliate',
+    description: 'Convert retailer links to [geo_link], add [geo_box] + disclosure, market gate',
+    requires: ['linked_html'],
+    produces: 'affiliate_html',
   },
   images: {
     name: 'Images',
@@ -311,6 +327,20 @@ function validateBrief(brief) {
   if (!brief.category) warnings.push('No category specified');
   if (!brief.author) warnings.push('No author specified — defaulting to "Ryan"');
 
+  // Optional cluster targeting: { city, region_slug, cornerstone, max_clubs }
+  if (brief.cluster !== undefined) {
+    if (!brief.cluster || typeof brief.cluster !== 'object') {
+      errors.push('cluster must be an object: { city, region_slug, cornerstone, max_clubs? }');
+    } else {
+      if (!brief.cluster.region_slug && !brief.cluster.cornerstone) {
+        warnings.push('cluster has neither region_slug nor cornerstone — cluster linking will be skipped');
+      }
+      if (brief.cluster.region_slug && !brief.cluster.city) {
+        warnings.push('cluster.city missing — derived from region_slug for anchors');
+      }
+    }
+  }
+
   // Apply defaults
   brief.tier = brief.tier || 'supporting';
   brief.author = brief.author || 'Ryan';
@@ -380,6 +410,9 @@ async function runStage(stageName, input, options = {}) {
         break;
       case 'linking':
         result.output = await executeLinking(input, options);
+        break;
+      case 'affiliate':
+        result.output = await executeAffiliate(input, options);
         break;
       case 'images':
         result.output = await executeImages(input, options);
@@ -640,18 +673,74 @@ async function executeLinking(input, options) {
     }
   }
 
-  const linked = await linker.applyInternalLinks(html, pageIndex, brief);
+  // Cluster targeting first (UP to cornerstone early, ACROSS to region hub + clubs)
+  let working = html;
+  let clusterLinks = 0;
+  if (brief.cluster && typeof linker.applyClusterLinks === 'function') {
+    try {
+      const cl = await linker.applyClusterLinks(working, brief.cluster, brief, { pageIndex });
+      working = cl.html;
+      clusterLinks = cl.linksApplied;
+      output.cluster_report = cl.report;
+      output.cluster_clubs = (cl.clubs || []).map(c => ({ slug: c.slug, url: c.url, review_count: c.review_count }));
+    } catch (err) {
+      output._warnings.push(`Cluster linking failed (non-blocking): ${err.message}`);
+    }
+  }
+
+  const linked = await linker.applyInternalLinks(working, pageIndex, brief);
   const outPath = workPath('linked', slug, 'html');
-  const linkedHtml = typeof linked === 'string' ? linked : (linked.html || html);
+  const linkedHtml = typeof linked === 'string' ? linked : (linked.html || working);
   fs.writeFileSync(outPath, linkedHtml, 'utf-8');
 
   output.linked_html = linkedHtml;
   output._output_path = outPath;
 
-  if (typeof linked === 'object' && linked.links_added !== undefined) {
-    output.links_added = linked.links_added;
+  if (typeof linked === 'object') {
+    const applied = linked.linksApplied ?? linked.links_added;
+    if (applied !== undefined) output.links_added = applied + clusterLinks;
+    if (linked.report) output.link_report = linked.report;
   }
 
+  return output;
+}
+
+/**
+ * Affiliate stage: retailer links -> [geo_link], one [geo_box] per product
+ * section (capped per 1,000 words), disclosure once, market gate.
+ * Report is stored in the ledger as `affiliate`.
+ */
+async function executeAffiliate(input, options) {
+  const html = input.linked_html;
+  const brief = input.validated_brief || {};
+  const slug = brief.slug || 'affiliate';
+  const affiliate = getAffiliateLinker();
+  const output = { _warnings: [], _output_path: null };
+
+  if (!affiliate) {
+    output.affiliate_html = html;
+    output.affiliate = { skipped_reason: 'module_unavailable' };
+    output._warnings.push('affiliate-linker module not available — HTML passed through unchanged');
+    return output;
+  }
+
+  const { html: monetised, report } = affiliate.applyAffiliateLinks(html, brief, options.affiliate || {});
+  const outPath = workPath('affiliate', slug, 'html');
+  fs.writeFileSync(outPath, monetised, 'utf-8');
+
+  output.affiliate_html = monetised;
+  output.affiliate = report;
+  output._output_path = outPath;
+
+  if (report.skipped_reason) {
+    output._warnings.push(`Affiliate stage skipped (${report.skipped_reason}) — ${report.links_stripped} money link(s) stripped to plain text`);
+  }
+  if (report.products_without_slug && report.products_without_slug.length > 0) {
+    output._warnings.push(
+      `${report.products_without_slug.length} product(s) without a plugin slug — add to Settings > Geo Links: ` +
+      report.products_without_slug.map(p => p.suggested_slug).join(', ')
+    );
+  }
   return output;
 }
 
@@ -708,7 +797,7 @@ async function executeSchema(input, options) {
  * QC stage: run 54-point checklist.
  */
 async function executeQC(input, options) {
-  const html = input.linked_html;
+  const html = bodyHtml(input);
   const schema = input.schema_html;
   const imagePlan = input.image_plan;
   const brief = input.validated_brief || {};
@@ -760,7 +849,7 @@ async function executeQC(input, options) {
  * Fact Check stage: extract claims, build fact-check log, validate.
  */
 async function executeFactCheck(input, options) {
-  const html = input.linked_html;
+  const html = bodyHtml(input);
   const research = input.research_report;
   const brief = input.validated_brief || {};
   const slug = brief.slug || 'factcheck';
@@ -813,7 +902,7 @@ async function executeFactCheck(input, options) {
  * Dry-run ALWAYS default.
  */
 async function executePublish(input, options) {
-  const html = input.linked_html;
+  const html = bodyHtml(input);
   const schema = input.schema_html;
   const qcResult = input.qc_result;
   const factLog = input.fact_check_log;
@@ -1008,6 +1097,11 @@ async function produceArticle(brief, options = {}) {
     if (result.status === 'pass') {
       ledger.completed_stages.push(stageName);
 
+      // Affiliate report is surfaced at the top level of the ledger
+      if (stageName === 'affiliate' && result.output && result.output.affiliate) {
+        ledger.affiliate = result.output.affiliate;
+      }
+
       // Merge output into pipeline data
       if (result.output) {
         const produces = stage.produces;
@@ -1102,7 +1196,7 @@ async function produceArticle(brief, options = {}) {
 
   // 3. All stages complete
   // Update output summary
-  ledger.output.word_count = pipelineData.word_count || countWords(pipelineData.linked_html || pipelineData.draft_html || '');
+  ledger.output.word_count = pipelineData.word_count || countWords(bodyHtml(pipelineData));
   ledger.output.fact_check_log_path = ledger.stage_results.fact_check?.output_path || null;
   if (pipelineData.wp_post && pipelineData.wp_post.id) {
     ledger.output.wp_post_id = pipelineData.wp_post.id;
@@ -1388,6 +1482,18 @@ async function cli() {
         console.log('\nQC Failures:');
         for (const f of ledger.qc_failures) {
           console.log(`  Attempt ${f.attempt}: rerouted to ${f.reroute_to} (checks: ${f.failed_checks.join(', ')})`);
+        }
+      }
+
+      if (ledger.affiliate) {
+        const a = ledger.affiliate;
+        console.log('\nAffiliate:');
+        if (a.skipped_reason) {
+          console.log(`  SKIPPED (${a.skipped_reason}) — ${a.links_stripped || 0} money link(s) stripped`);
+        } else {
+          console.log(`  market ${a.market} | partners: ${(a.partners_for_market || []).join(', ')}`);
+          console.log(`  geo_links: ${a.links_converted} converted | boxes: ${a.boxes_added} added | disclosure: ${a.disclosure}`);
+          console.log(`  products without slug: ${(a.products_without_slug || []).map(p => p.suggested_slug).join(', ') || 'none'}`);
         }
       }
 
