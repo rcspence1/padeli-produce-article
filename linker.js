@@ -710,6 +710,8 @@ async function refreshPageIndex() {
 function applyInternalLinks(html, pageIndex, postMeta, options = {}) {
   const report = [];
   let result = html;
+  pageIndex = pageIndex || { pages: [], listings: [] };
+  postMeta = postMeta || {};
 
   // Step 0a: Check if page index is empty or stale (>24h)
   const allPages = [...(pageIndex.pages || []), ...(pageIndex.listings || [])];
@@ -1051,11 +1053,328 @@ function _isInsideFaqQuestion(position, html) {
 }
 
 // ---------------------------------------------------------------------------
+// Cluster targeting — UP / ACROSS / DOWN
+//
+// A brief may carry:
+//   cluster: {
+//     city: "Manchester",                        // display name for anchors
+//     region_slug: "manchester",                 // WP `region` taxonomy term slug
+//     cornerstone: "/best-padel-rackets-uk-2026/", // path or slug of the parent cornerstone
+//     max_clubs: 5                               // optional, 3-5 (default 5)
+//   }
+//
+//   UP     -> 1 early link to the cornerstone
+//   ACROSS -> 1 link to the region hub  https://padeli.com/clubs/<cc>/<region_slug>/
+//          -> links to the top 3-5 club listings in that region (ordered by
+//             _google_review_count desc, then date desc; fetched read-only
+//             from /wp-json/wp/v2/listing?region=<term id>&status=publish)
+//   DOWN   -> leaves via [PLANNED:/slug/] markers (resolved by applyInternalLinks)
+// ---------------------------------------------------------------------------
+
+const REGION_HUB_ANCHORS = [
+  'padel clubs in {city}',
+  '{city} padel clubs',
+  'every padel club in {city}',
+  'where to play padel in {city}',
+  'our {city} club directory',
+];
+
+const MARKET_TO_CC = { UK: 'gb', GB: 'gb', UAE: 'ae', BALI: 'id', USA: 'us' };
+
+function _marketToCc(value) {
+  const up = String(value || '').toUpperCase().trim();
+  if (MARKET_TO_CC[up]) return MARKET_TO_CC[up];
+  if (/^[A-Z]{2}$/.test(up)) return up.toLowerCase();
+  return null;
+}
+
+function _fixCasing(text) {
+  return text.replace(/\b(uk|usa|uae|nz)\b/gi, (m) => m.toUpperCase());
+}
+
+function _normUrl(u) {
+  return String(u || '').replace(/\/+$/, '').toLowerCase();
+}
+
+function _hasLinkTo(html, url) {
+  const n = _normUrl(url);
+  const re = /href=["']([^"']+)["']/gi;
+  let m;
+  while ((m = re.exec(html)) !== null) {
+    const h = _normUrl(m[1].startsWith('/') ? SITE_URL + m[1] : m[1]);
+    if (h === n) return true;
+  }
+  return false;
+}
+
+async function _defaultFetchJson(url) {
+  const res = await fetch(url, { method: 'GET', headers: { 'User-Agent': USER_AGENT } });
+  if (!res.ok) throw new Error(`GET ${url} failed (${res.status})`);
+  return res.json();
+}
+
+/**
+ * Fetch the published club listings for a region term (public GET, no auth).
+ *
+ * @param {string} regionSlug - e.g. "manchester"
+ * @param {object} [options]
+ * @param {Function} [options.fetchJson] - injectable fetcher (tests)
+ * @returns {Promise<{ region: object|null, clubs: Array<object> }>}
+ */
+async function fetchRegionClubs(regionSlug, options = {}) {
+  const fetchJson = options.fetchJson || _defaultFetchJson;
+  const terms = await fetchJson(
+    `${SITE_URL}/wp-json/wp/v2/region?slug=${encodeURIComponent(regionSlug)}&_fields=id,slug,name,parent`
+  );
+  const region = Array.isArray(terms) && terms.length ? terms[0] : null;
+  if (!region) return { region: null, clubs: [] };
+
+  const rows = await fetchJson(
+    `${SITE_URL}/wp-json/wp/v2/listing?region=${region.id}&status=publish&per_page=100` +
+    `&_fields=id,slug,link,title,date,meta._google_review_count,meta._google_rating,meta._listing_type`
+  );
+
+  const clubs = (Array.isArray(rows) ? rows : [])
+    .filter((l) => {
+      const type = l.meta && l.meta._listing_type;
+      return type === 'clubs' || (!type && /\/clubs\//.test(l.link || ''));
+    })
+    .map((l) => {
+      const rc = Number(l.meta && l.meta._google_review_count);
+      return {
+        id: l.id,
+        slug: l.slug,
+        title: (l.title && l.title.rendered ? l.title.rendered : l.title || '').replace(/&amp;/g, '&').trim(),
+        url: l.link || `${SITE_URL}/clubs/${regionSlug}/${l.slug}/`,
+        review_count: Number.isFinite(rc) ? rc : -1,
+        rating: Number(l.meta && l.meta._google_rating) || null,
+        date: l.date || '',
+      };
+    })
+    .sort((a, b) => (b.review_count - a.review_count) || (new Date(b.date) - new Date(a.date)));
+
+  return { region, clubs };
+}
+
+/**
+ * Build the UP / ACROSS targets for a cluster brief.
+ */
+function buildClusterTargets(cluster, postMeta = {}, pageIndex = null) {
+  const targets = { up: null, hub: null };
+
+  if (cluster.cornerstone) {
+    const raw = String(cluster.cornerstone).trim();
+    const slug = raw.replace(/^https?:\/\/[^/]+/, '').replace(/^\/|\/$/g, '');
+    const indexed = pageIndex && (pageIndex.pages || []).find((p) => p.slug === slug);
+    const keyword = (indexed && (indexed.focus_keyword || indexed.title)) || slug.replace(/-/g, ' ');
+    targets.up = {
+      slug,
+      url: `${SITE_URL}/${slug}/`,
+      title: (indexed && indexed.title) || _fixCasing(keyword),
+      focus_keyword: keyword,
+    };
+  }
+
+  if (cluster.region_slug) {
+    const cc = _marketToCc(postMeta.country_code || postMeta.market) || 'gb';
+    const city = cluster.city || cluster.region_slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    targets.hub = {
+      slug: `clubs/${cc}/${cluster.region_slug}`,
+      url: `${SITE_URL}/clubs/${cc}/${cluster.region_slug}/`,
+      city,
+      cc,
+    };
+  }
+
+  return targets;
+}
+
+/**
+ * Wrap the first occurrence of one of `terms` in an unused paragraph, or
+ * append `fallbackSentence` to the first unused paragraph of 15+ words.
+ * Returns { html, used: paragraphIdx|null, how: 'wrap'|'append'|null }.
+ */
+function _placeLink(html, terms, url, anchorForWrap, fallbackSentence, usedIdx) {
+  const paragraphs = _extractLinkableParagraphs(html);
+  for (const para of paragraphs) {
+    if (usedIdx.has(para.idx)) continue;
+    if (_isInsideFaqQuestion(para.position, html)) continue;
+    const lower = para.text.toLowerCase();
+    for (const term of terms) {
+      const pos = lower.indexOf(term.toLowerCase());
+      if (pos === -1) continue;
+      const matchText = para.text.slice(pos, pos + term.length);
+      if (!para.html.includes(matchText)) continue; // text split by inline tags
+      const anchor = anchorForWrap || matchText;
+      const newPara = para.html.replace(matchText, `<a href="${url}">${anchor === matchText ? matchText : anchor}</a>`);
+      return { html: html.replace(para.html, newPara), used: para.idx, how: 'wrap' };
+    }
+  }
+  if (fallbackSentence) {
+    for (const para of paragraphs) {
+      if (usedIdx.has(para.idx)) continue;
+      if (_isInsideFaqQuestion(para.position, html)) continue;
+      if (para.text.split(/\s+/).length < 15) continue;
+      const newPara = para.html.replace(/<\/p>$/, ` ${fallbackSentence}</p>`);
+      return { html: html.replace(para.html, newPara), used: para.idx, how: 'append' };
+    }
+  }
+  return { html, used: null, how: null };
+}
+
+/**
+ * Apply cluster links (UP to cornerstone, ACROSS to region hub + top clubs).
+ * DOWN links use [PLANNED:/slug/] markers and are resolved by applyInternalLinks.
+ *
+ * Idempotent: targets already linked in the HTML are skipped.
+ *
+ * @param {string} html
+ * @param {object} cluster - brief.cluster
+ * @param {object} [postMeta] - brief (slug, market, country_code)
+ * @param {object} [options]
+ * @param {object} [options.pageIndex]
+ * @param {Array<object>} [options.clubs] - pre-fetched clubs (skips the fetch)
+ * @param {Function} [options.fetchJson]
+ * @returns {Promise<{ html: string, linksApplied: number, report: string[], clubs: Array<object>, region: object|null }>}
+ */
+async function applyClusterLinks(html, cluster, postMeta = {}, options = {}) {
+  const report = [];
+  let result = html;
+  let linksApplied = 0;
+
+  if (!cluster || (!cluster.cornerstone && !cluster.region_slug)) {
+    return { html, linksApplied: 0, report: ['No cluster targeting in brief'], clubs: [], region: null };
+  }
+
+  const targets = buildClusterTargets(cluster, postMeta, options.pageIndex);
+  const usedIdx = new Set();
+
+  // UP — cornerstone, 1 link, early
+  if (targets.up) {
+    if (targets.up.slug === postMeta.slug) {
+      report.push('UP: cornerstone is this post — skipped (self-link)');
+    } else if (_hasLinkTo(result, targets.up.url)) {
+      report.push(`UP: already links to ${targets.up.url} — skipped`);
+    } else {
+      const kw = targets.up.focus_keyword;
+      const noYear = kw.replace(/\s+\d{4}$/, '');
+      const anchorType = selectAnchorType(0, 3); // first link in the sequence → exact
+      const anchor = _fixCasing(anchorType === 'exact' ? noYear : generateAnchorText(targets.up, anchorType));
+      const terms = [kw, noYear, targets.up.title].filter(Boolean);
+      const placed = _placeLink(
+        result, terms, targets.up.url, anchor,
+        `For the full picture, see our guide to <a href="${targets.up.url}">${anchor}</a>.`,
+        usedIdx
+      );
+      if (placed.used !== null) {
+        result = placed.html;
+        usedIdx.add(placed.used);
+        linksApplied++;
+        report.push(`UP: [${anchorType}] "${anchor}" → ${targets.up.url} (para ${placed.used}, ${placed.how})`);
+      } else {
+        report.push(`UP: no suitable paragraph for ${targets.up.url}`);
+      }
+    }
+  }
+
+  // ACROSS — region hub, 1 link
+  if (targets.hub) {
+    if (_hasLinkTo(result, targets.hub.url)) {
+      report.push(`ACROSS: already links to ${targets.hub.url} — skipped`);
+    } else {
+      const city = targets.hub.city;
+      const template = REGION_HUB_ANCHORS[_stableHash(postMeta.slug || city) % REGION_HUB_ANCHORS.length];
+      const anchor = template.replace('{city}', city);
+      const terms = [`padel clubs in ${city}`, `padel courts in ${city}`, `clubs in ${city}`, `padel in ${city}`, `${city} padel`];
+      const placed = _placeLink(
+        result, terms, targets.hub.url, null,
+        `Browse <a href="${targets.hub.url}">${anchor}</a> for every venue in the area.`,
+        usedIdx
+      );
+      if (placed.used !== null) {
+        result = placed.html;
+        usedIdx.add(placed.used);
+        linksApplied++;
+        report.push(`ACROSS: hub "${placed.how === 'wrap' ? '(mention)' : anchor}" → ${targets.hub.url} (para ${placed.used}, ${placed.how})`);
+      } else {
+        report.push(`ACROSS: no suitable paragraph for ${targets.hub.url}`);
+      }
+    }
+  }
+
+  // ACROSS — top 3-5 club listings in the region
+  let clubs = options.clubs || null;
+  let region = null;
+  if (cluster.region_slug && !clubs) {
+    try {
+      const fetched = await fetchRegionClubs(cluster.region_slug, { fetchJson: options.fetchJson });
+      clubs = fetched.clubs;
+      region = fetched.region;
+      if (!region) report.push(`ACROSS: region term "${cluster.region_slug}" not found`);
+    } catch (err) {
+      clubs = [];
+      report.push(`ACROSS: could not fetch clubs for "${cluster.region_slug}": ${err.message}`);
+    }
+  }
+  clubs = clubs || [];
+
+  const maxClubs = Math.min(5, Math.max(3, Number(cluster.max_clubs) || 5));
+  const top = clubs.slice(0, maxClubs);
+  const unplaced = [];
+  for (const club of top) {
+    if (_hasLinkTo(result, club.url)) { report.push(`ACROSS: already links to ${club.title} — skipped`); continue; }
+    const placed = _placeLink(result, [club.title], club.url, null, null, usedIdx);
+    if (placed.used !== null) {
+      result = placed.html;
+      usedIdx.add(placed.used);
+      linksApplied++;
+      report.push(`ACROSS: club "${club.title}" → ${club.url} (para ${placed.used}, wrap)`);
+    } else {
+      unplaced.push(club);
+    }
+  }
+
+  if (unplaced.length > 0) {
+    const city = targets.hub ? targets.hub.city : (cluster.city || cluster.region_slug);
+    const gutenberg = /<!-- wp:/.test(result);
+    const items = unplaced.map((c) => `<li><a href="${c.url}">${c.title}</a>${c.review_count > 0 ? ` (${c.review_count} Google reviews)` : ''}</li>`);
+    const block = gutenberg
+      ? [
+          '', '<!-- wp:heading {"level":3} -->', `<h3 class="wp-block-heading">Where to play in ${city}</h3>`, '<!-- /wp:heading -->',
+          '', '<!-- wp:list -->', '<ul class="wp-block-list">', ...items, '</ul>', '<!-- /wp:list -->', '',
+        ].join('\n')
+      : ['', `<h3>Where to play in ${city}</h3>`, '<ul>', ...items, '</ul>', ''].join('\n');
+
+    // Before the Related Reading heading if present, else at the end
+    const rr = result.search(/<h2\b[^>]*>\s*Related Reading\s*<\/h2>/i);
+    let at = rr;
+    if (rr !== -1) {
+      const pre = result.slice(Math.max(0, rr - 200), rr);
+      const m = pre.match(/<!-- wp:heading(?: \{[^}]*\})? -->\s*$/);
+      if (m) at = rr - m[0].length;
+    }
+    result = at === -1 ? result + block : result.slice(0, at) + block + result.slice(at);
+    linksApplied += unplaced.length;
+    report.push(`ACROSS: added "Where to play in ${city}" list with ${unplaced.length} club link(s)`);
+  }
+
+  // DOWN — planned markers are resolved by applyInternalLinks; just report
+  const planned = findPlannedLinks(result);
+  report.push(`DOWN: ${planned.length} [PLANNED:/slug/] marker(s) for applyInternalLinks to resolve`);
+
+  report.push(`Cluster links applied: ${linksApplied}`);
+  return { html: result, linksApplied, report, clubs: top, region };
+}
+
+// ---------------------------------------------------------------------------
 // Exports
 // ---------------------------------------------------------------------------
 
 module.exports = {
   applyInternalLinks,
+  applyClusterLinks,
+  fetchRegionClubs,
+  buildClusterTargets,
   buildPageIndex,
   buildPageIndexFromWP,
   loadPageIndex,
